@@ -3,9 +3,15 @@ import reactLogo from './assets/react.svg';
 import googleLabsLogo from './assets/google-labs.png';
 import viteLogo from '/vite.svg'
 import './App.css'
-import * as Comlink from 'comlink';
+import { wrap, expose, Endpoint } from 'comlink';
+import { MainApi, Runnable } from './api-types';
 
-type Runnable = { run: () => number };
+const exposeToRemote = (remoteName: string, endpoint: Endpoint) => expose({
+  callMain() {
+    console.log(`Main thread called ${remoteName}`);
+    return remoteName;
+  }
+} as MainApi, endpoint);
 
 
 function App() {
@@ -18,33 +24,21 @@ function App() {
     iframe.className = 'card';
 
     new Promise((resolve) => (iframe.onload = resolve)).then(async () => {
-      const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+      const worker1 = new Worker(new URL('./worker1.ts', import.meta.url), { type: 'module' });
       const worker2 = new Worker(new URL('./worker2.ts', import.meta.url), { type: 'module' });
+      // using Comlink.windowEndpoint does not allow bi-directional communication
       const channel = new MessageChannel();
 
-      Comlink.expose({
-        callMain() {
-          console.log('Main thread called iframe');
-          return 30;
-        }
-      }, channel.port2);
-      Comlink.expose({
-        callMain() {
-          console.log('Main thread called');
-          return 10;
-        },
-      }, worker);
-      Comlink.expose({
-        callMain() {
-          console.log('Main thread called 2');
-          return 20;
-        },
-      }, worker2);
+      exposeToRemote('iframe', channel.port2);
+      exposeToRemote('worker 1', worker1);
+      exposeToRemote('worker 2', worker2);
+
+      // init channel
       iframe.contentWindow!.postMessage({ type: 'INIT_PORT' }, '*', [channel.port1]);
 
-      const iframeRemote = Comlink.wrap<Runnable>(channel.port2);
-      const remote = Comlink.wrap<Runnable>(worker);
-      const remote2 = Comlink.wrap<Runnable>(worker2);
+      const iframeRemote = wrap<Runnable>(channel.port2);
+      const remote = wrap<Runnable>(worker1);
+      const remote2 = wrap<Runnable>(worker2);
       setIframeCallback(() => () => iframeRemote.run().then((result) => {
         console.log('Iframe run result', result);
       }));

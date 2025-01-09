@@ -1,14 +1,15 @@
-import * as Comlink from 'comlink';
+import { wrap, expose } from 'comlink';
 import { Endpoint } from 'comlink';
+import { MainApi, Runnable } from './api-types';
 
-const exposed = {
+const exposed: Runnable = {
   async run() {
     console.log('Worker is running');
-    const mainThread = Comlink.wrap<{callMain: () => number}>(self as Endpoint);
+    const mainThread = wrap<MainApi>(self as Endpoint);
     const mainValue = await mainThread.callMain();
     console.log('Loop is done: ', mainValue);
     return mainValue;
   },
 };
 
-Comlink.expose(exposed, self as Endpoint);
+expose(exposed, self as Endpoint);
